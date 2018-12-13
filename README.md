@@ -136,7 +136,6 @@ class Bottles
   end
 end
 ```
-
 ## DRY to BottleNumber
 - **Code Smell** Primitive Obsession
 - **Recipe** Extract Class
@@ -562,17 +561,263 @@ class BottlesTest < Minitest::Test
 end
 ```
 
+## Vary Verse
+- `Bottles` violates the **Single Responsibility Principle**
+
+Refactor `Bottles` into two new classes: `DescendingVerseSong` and `BottleVerse`. This new arrangement injects `BottleVerse` into `DescendingVerseSong`. This allows `DescendingVerseSong` to use `BottleVerse` as a template for a verse of the song.
+```ruby
+# ...
+class DescendingVerseSong
+  attr_reader :verse_template, :max, :min
+  def initialize(verse_template: BottleVerse, max: 99, min: 0)
+    @verse_template = verse_template
+    @max = max
+    @min = min
+  end
+
+  def song
+    verses(max, min)
+  end
+
+  def verses(upper, lower)
+    upper.downto(lower).map { |i| verse(i) }.join("\n")
+  end
+
+  def verse(number)
+    verse_template.lyrics(number)
+  end
+end
+
+class BottleVerse
+  def self.lyrics(number)
+    new(BottleNumber.for(number)).lyrics
+  end
+
+  attr_reader :bottle_number
+  def initialize(bottle_number)
+    @bottle_number = bottle_number
+  end
+
+  def lyrics
+    "#{bottle_number} of beer on the wall, ".capitalize +
+    "#{bottle_number} of beer.\n" +
+    "#{bottle_number.action}, " +
+    "#{bottle_number.successor} of beer on the wall.\n"
+  end
+end
+# ...
+```
+
+### Update the tests to handle refactored code
+```ruby
+require_relative '../../test_helper'
+require_relative '../lib/bottles'
+
+class BottleVerseTest < Minitest::Test
+  def test_the_first_verse
+    expected = "99 bottles of beer on the wall, " +
+      "99 bottles of beer.\n" +
+      "Take one down and pass it around, " +
+      "98 bottles of beer on the wall.\n"
+    assert_equal expected, BottleVerse.lyrics(99)
+  end
+
+  def test_another_verse
+    expected = "3 bottles of beer on the wall, " +
+      "3 bottles of beer.\n" +
+      "Take one down and pass it around, " +
+      "2 bottles of beer on the wall.\n"
+    assert_equal expected, BottleVerse.lyrics(3)
+  end
+
+  def test_verse_2
+    expected = "2 bottles of beer on the wall, " +
+      "2 bottles of beer.\n" +
+      "Take one down and pass it around, " +
+      "1 bottle of beer on the wall.\n"
+    assert_equal expected, BottleVerse.lyrics(2)
+  end
+
+  def test_verse_1
+    expected = "1 bottle of beer on the wall, " +
+      "1 bottle of beer.\n" +
+      "Take it down and pass it around, " +
+      "no more bottles of beer on the wall.\n"
+    assert_equal expected, BottleVerse.lyrics(1)
+  end
+
+  def test_verse_0
+    expected = "No more bottles of beer on the wall, " +
+      "no more bottles of beer.\n" +
+      "Go to the store and buy some more, " +
+      "99 bottles of beer on the wall.\n"
+    assert_equal expected, BottleVerse.lyrics(0)
+  end
+end
+
+class VerseDouble
+  def self.lyrics(number)
+    "This is verse #{number}.\n"
+  end
+end
+
+class DescendingVerseSongTest < Minitest::Test
+  def test_a_verse
+    expected = "This is verse 98.\n"
+    assert_equal expected, DescendingVerseSong.new(verse_template: VerseDouble).verse(98)
+  end
+
+  def test_a_couple_verses
+    expected =
+      "This is verse 99.\n" +
+      "\n" +
+      "This is verse 98.\n"
+    assert_equal expected, DescendingVerseSong.new(verse_template: VerseDouble).verses(99, 98)
+  end
+
+  def test_the_whole_song
+    expected =
+      "This is verse 5.\n" +
+      "\n" +
+      "This is verse 4.\n" +
+      "\n" +
+      "This is verse 3.\n" +
+      "\n" +
+    "This is verse 2.\n"
+    assert_equal expected, DescendingVerseSong.new(verse_template: VerseDouble, max: 5, min: 2).song
+  end
+end
+```
+
 ## Handling Nils
 - **Code Smell** Liskov Violation
 - **Recipe** Nil Pattern
+
+The objects need to conform to the same API even in the case that `Animal` is `nil`. So create a new class that conforms to the `Animal` API to handle the `nil` case.
+
+### V1 - Monkey Patch NilClass (Bad)
+```ruby
+using Article
+
+class NilClass
+  def sound
+    '<silence>'
+  end
+
+  def species
+    '<silence>'
+  end
+end
+
+class Farm
+  # ...
+end
+```
+
+### V2 - Create SilentAnimal class (Good)
+```ruby
+using Article
+
+class SilentAnimal
+  def sound
+    '<silence>'
+  end
+
+  def species
+    '<silence>'
+  end
+end
+
+class Farm
+  def initialize(animals)
+    @animals = animals.map { |animal| animal || SilentAnimal.new }
+  end
+
+  def verse(animal)
+    animal = animal.sound
+  end
+end
+```
 
 ## Polymorphism with Composition
 - **Code Smell** Single Responsibility Violation
 - **Recipe** Composition
 
+The example given uses the `RandomHouse` and `PirateHouse` classes. The class hierarchy version of the `House` classes violaed the **Single Responsibility Principle** because duplicated the same code in the subclasses.
+
+This is the final version using polymorphism with composition:
+```ruby
+class House
+  DATA =
+    [ "the horse and the hound and the horn that belonged to",
+      "the farmer sowing his corn that kept",
+      "the rooster that crowed in the morn that woke",
+      "the priest all shaven and shorn that married",
+      "the man all tattered and torn that kissed",
+      "the maiden all forlorn that milked",
+      "the cow with the crumpled horn that tossed",
+      "the dog that worried",
+      "the cat that killed",
+      "the rat that ate",
+      "the malt that lay in",
+      "the house that Jack built"]
+  attr_reader :data, :prefix
+
+  def initialize(orderer: UnchangedOrderer.new, prefixer: UnchangedPrefixer.new)
+    @data = orderer.order(DATA)
+    @prefix = prefixer.prefix
+  end
+
+  def recite
+    1.upto(12).collect {|i| line(i)}.join("\n")
+  end
+
+  def phrase(num)
+    data.last(num).join(" ")
+  end
+
+  def line(num)
+    "#{prefix} #{phrase(num)}.\n"
+  end
+
+  def data
+    DATA
+  end
+end
+
+class UnchangedPrefixer
+  def prefix
+    'This is'
+  end
+end
+
+class PrivatePrefixer
+  def prefix
+    'Arggg'
+  end
+end
+
+class PartialOrderer
+  def order(data)
+  end
+end
+
+class RandomOrderer
+  def order(data)
+    data.shuffle
+  end
+end
+
+class UnchangedOrderer
+  def order(data)
+    data
+  end
+end
+```
+
 ## Other Notes
 * Things that we want to vary, we have to isolate first.
-* Depend on abstractions, not data/concretions.
+* Depend on abstractions, not data/concretions, e.g. using dependency injection
 * The feeling that you want to qualify names, e.g. `bottle_quantity`, often indicates a new type
 * SOLID
 * GOOS book

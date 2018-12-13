@@ -744,7 +744,7 @@ end
 
 * Things that we want to vary, we have to isolate first.
   * Isolate the things we want to vary.
-* Positional arguments inhibited refactoring. Keyword arguments enable refactoring. Always default to keyword arguments.
+* Positional arguments inhibit refactoring. Keyword arguments enable refactoring. Always default to keyword arguments.
 * When refactoring: the new code has to run (be green) before you delete the old code.
 
 ## What your code should look like when it's done
@@ -792,7 +792,6 @@ end
 * Everytime you find a bug, write a failing test.
 * **Mocking** You may not mock code you do not own.
 * **Stubbing** You cannot stub in the object under test.
-
 
 ## Animal
 * Use `refine` when monkey patching. Only applies where `using`
